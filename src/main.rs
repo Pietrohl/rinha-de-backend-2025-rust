@@ -7,6 +7,8 @@ use crate::db::DATABASE_URL;
 mod controller;
 mod db;
 mod structs;
+mod repository;
+mod error_handling;
 pub mod payment_processors;
 
 #[tokio::main]
@@ -23,7 +25,7 @@ async fn main() {
         )
         .with_state(database);
 
-    let listener = std::net::TcpListener::bind("0.0.0.0:5000")
+    let listener = std::net::TcpListener::bind("0.0.0.0:3000")
         .expect("error listening to socket 0.0.0.0:3000");
     listener.set_nonblocking(true).unwrap();
 

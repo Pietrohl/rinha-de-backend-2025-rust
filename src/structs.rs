@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::payment_processors;
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct PaymentDTO {
     #[serde(rename = "correlationId")]
@@ -25,4 +27,14 @@ pub struct PaymentsServiceSummary {
 pub struct PaymentsSummaryResponseDTO {
     pub default: PaymentsServiceSummary,
     pub fallback: PaymentsServiceSummary,
+}
+
+impl Into<payment_processors::structs::PaymentProcessorDTO> for PaymentDTO {
+    fn into(self) -> payment_processors::structs::PaymentProcessorDTO {
+        payment_processors::structs::PaymentProcessorDTO {
+            correlation_id: self.correlation_id.to_string(),
+            amount: self.amount , // Convert to cents
+            requested_at: Utc::now(),
+        }
+    }
 }
