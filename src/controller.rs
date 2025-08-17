@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::Serialize;
 use serde_json::json;
 
 use crate::{
@@ -41,17 +40,22 @@ pub async fn payments(
 
     match response {
         Ok(_res) => {
+            println!("Payment processed successfully: {:?}", json!(&transaction));
+            println!("Service used: {:?}", service.to_string());
+            println!("Pulling connection from the database...");
             let conn = database.pool.get().await.map_err(internal_error)?;
-
+            println!("Saving processed payment to the database...");
             repository::save_processed_payment(
                 conn,
-                &transaction.correlation_id.to_string(),
+                transaction.correlation_id,
                 transaction.requested_at,
                 transaction.amount,
                 service,
             )
             .await
             .map_err(internal_error)?;
+
+            println!("Payment saved to the database successfully.");
 
             Ok((
                 StatusCode::OK,
@@ -83,4 +87,20 @@ pub async fn payments_summary(
         .map_err(internal_error)?;
 
     Ok((StatusCode::OK, Json(summary)))
+}
+
+
+pub async fn purge_payments(
+    State(database): State<PostgresDatabase>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let conn = database.pool.get().await.map_err(internal_error)?;
+
+    let rows_affected = repository::purge_payments(conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "message": format!("Purged {} payments", rows_affected) })),
+    ))
 }

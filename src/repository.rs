@@ -6,16 +6,17 @@ use tokio_postgres::Error;
 
 use crate::{db::BB8PooledConnection, payment_processors, structs::PaymentsSummaryResponseDTO};
 
-const INSERT_QUERY: &str = "INSERT INTO processed_payments (correlation_id, processed_at, amount, service) VALUES ($1, $2, $3, $4)";
+const INSERT_QUERY: &str = "INSERT INTO transactions (correlation_id, processed_at, amount, service) VALUES ($1, $2, $3, $4)";
 
-const SUMMARY_QUERY: &str = "SELECT service, COUNT(*) as total_requests, COALESCE(SUM(amount), 0) as total_amount FROM processed_payments WHERE ($1::timestamptz IS NULL OR processed_at >= $1) AND ($2::timestamptz IS NULL OR processed_at <= $2) GROUP BY service";
+const SUMMARY_QUERY: &str = "SELECT service, COUNT(*) as total_requests, CAST(COALESCE(SUM(amount), 0) as BIGINT) as total_amount FROM transactions WHERE ($1::timestamptz IS NULL OR processed_at >= $1) AND ($2::timestamptz IS NULL OR processed_at <= $2) GROUP BY service";
 
 fn extract_summary(rows: &[Row], service: &str) -> PaymentsServiceSummary {
     for row in rows {
         let row_service: String = row.get("service");
         if row_service == service {
             let total_requests: i64 = row.get("total_requests");
-            let mut total_amount: f64 = row.get("total_amount");
+            let total_amount_dec: i64 = row.get("total_amount");
+            let mut total_amount: f64 = total_amount_dec as f64; // Convert cents to dollars
             total_amount = total_amount / 100.00; // Convert cents to dollars
             return PaymentsServiceSummary {
                 total_requests: total_requests as u32,
@@ -31,7 +32,7 @@ fn extract_summary(rows: &[Row], service: &str) -> PaymentsServiceSummary {
 
 pub async fn save_processed_payment<'a>(
     conn: BB8PooledConnection<'a>,
-    correlation_id: &str,
+    correlation_id: uuid::Uuid,
     date: DateTime<Utc>,
     amount: f64,
     service: payment_processors::service::PaymentProcessorServices,
@@ -40,7 +41,7 @@ pub async fn save_processed_payment<'a>(
         INSERT_QUERY,
         &[
             &correlation_id,
-            &date.to_rfc3339(),
+            &date,
             &((amount * 100.0).round() as i64),
             &service.to_string(),
         ],
@@ -54,15 +55,7 @@ pub async fn get_payments_summary<'a>(
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
 ) -> Result<PaymentsSummaryResponseDTO, Error> {
-    let from_param = from.map(|dt| dt.to_rfc3339());
-    let to_param = to.map(|dt| dt.to_rfc3339());
-
-    let rows = conn
-        .query(
-            SUMMARY_QUERY,
-            &[&from_param.as_deref(), &to_param.as_deref()],
-        )
-        .await?;
+    let rows = conn.query(SUMMARY_QUERY, &[&from, &to]).await?;
 
     let summary = PaymentsSummaryResponseDTO {
         default: extract_summary(&rows, "default"),
@@ -70,4 +63,13 @@ pub async fn get_payments_summary<'a>(
     };
 
     Ok(summary)
+}
+
+
+pub async fn purge_payments<'a>(
+    conn: BB8PooledConnection<'a>,
+) -> Result<u64, Error> {
+    let query = "DELETE FROM transactions";
+    let rows_affected = conn.execute(query, &[]).await?;
+    Ok(rows_affected)
 }

@@ -1,7 +1,10 @@
+use axum::extract::Request;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
+use hyper::body::Incoming;
 use tokio_postgres::NoTls;
-
+use hyper_util::{rt::{TokioExecutor, TokioIo}, server};
+use tower::Service;
 use crate::db::DATABASE_URL;
 // use crate::payment_processors;
 mod controller;
@@ -14,7 +17,14 @@ mod structs;
 #[tokio::main]
 async fn main() {
     let manager = PostgresConnectionManager::new_from_stringlike(DATABASE_URL, NoTls).unwrap();
-    let pool = Pool::builder().build(manager).await.unwrap();
+    let pool: Pool<PostgresConnectionManager<NoTls>> = bb8::Pool::builder()
+        .min_idle(50)
+        .retry_connection(true)
+        .max_size(100)
+        .build(manager)
+        .await
+        .unwrap();
+
     let database = db::PostgresDatabase::new(pool.clone());
 
     let app = axum::Router::new()
@@ -22,6 +32,10 @@ async fn main() {
         .route(
             "/payments-summary",
             axum::routing::get(controller::payments_summary),
+        )
+        .route(
+            "/purge-payments",
+            axum::routing::post(controller::purge_payments),
         )
         .with_state(database);
 
@@ -33,7 +47,31 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::from_std(listener).expect("error parsing std listener");
 
-    axum::serve(listener, app).await.unwrap();
-
+  
     eprintln!("Server up!");
+
+    loop {
+        let (stream, _) = listener.accept().await.unwrap();
+
+        let tower_service = app.clone();
+
+        tokio::spawn(async move {
+            let socket = TokioIo::new(stream);
+
+            let service = hyper::service::service_fn(move |request: Request<Incoming>| {
+                tower_service.clone().call(request)
+            });
+
+            if let Err(err) = server::conn::auto::Builder::new(TokioExecutor::new())
+                .serve_connection(socket, service)
+                .await
+            {
+                eprintln!("failed to serve connection: {err:#}");
+            }
+        });
+    }
+
+
+
+
 }

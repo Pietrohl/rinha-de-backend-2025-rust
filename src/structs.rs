@@ -32,7 +32,7 @@ pub struct PaymentsSummaryResponseDTO {
 impl Into<payment_processors::structs::PaymentProcessorDTO> for PaymentDTO {
     fn into(self) -> payment_processors::structs::PaymentProcessorDTO {
         payment_processors::structs::PaymentProcessorDTO {
-            correlation_id: self.correlation_id.to_string(),
+            correlation_id: self.correlation_id,
             amount: self.amount , // Convert to cents
             requested_at: Utc::now(),
         }
