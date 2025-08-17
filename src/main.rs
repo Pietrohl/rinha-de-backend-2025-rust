@@ -2,20 +2,13 @@ use std::time::Duration;
 
 use crate::{
     db::{DEFAULT_DATABASE_URL, DEFAULT_MEMORY_DATABASE_URL, MemoryDatabaseConnection},
-    error_handling::internal_error,
     structs::AppState,
 };
-use axum::{error_handling::HandleErrorLayer, extract::Request, handler};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use bb8_redis::RedisConnectionManager;
-use hyper::body::Incoming;
-use hyper_util::{
-    rt::{TokioExecutor, TokioIo},
-    server,
-};
 use tokio_postgres::NoTls;
-use tower::{Service, ServiceBuilder, buffer, limit::ConcurrencyLimitLayer};
+use tower::limit::ConcurrencyLimitLayer;
 // use crate::payment_processors;
 mod controller;
 mod db;

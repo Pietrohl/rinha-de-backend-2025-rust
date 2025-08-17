@@ -21,11 +21,6 @@ pub struct PaymentDatabaseEntry {
 }
 
 
-
-
-
-
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct PaymentSummaryQuery {
     pub from: Option<DateTime<Utc>>,
@@ -53,10 +48,6 @@ impl Into<payment_processors::structs::PaymentProcessorDTO> for PaymentDTO {
         }
     }
 }
-
-
-
-
 
 #[derive(Clone)]
 pub struct AppState {

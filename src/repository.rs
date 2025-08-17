@@ -4,12 +4,10 @@ use crate::{
     db::{MemoryDatabase, PostgresDatabase},
     structs::{PaymentDatabaseEntry, PaymentsServiceSummary},
 };
-// use hyper::server::conn;
 use redis::RedisError;
 use tokio_postgres::Row;
 
 use chrono::{DateTime, Utc};
-use payment_processors::service::PaymentProcessorServices;
 
 use crate::{
     db::PostgresPooledConnection, payment_processors, structs::PaymentsSummaryResponseDTO,
@@ -39,37 +37,37 @@ fn extract_summary(rows: &[Row], service: &str) -> PaymentsServiceSummary {
     }
 }
 
-fn extract_memory_summary(memory_payments: &[PaymentDatabaseEntry]) -> PaymentsSummaryResponseDTO {
-    let mut default_total_requests = 0u32;
-    let mut default_total_amount = 0f64;
-    let mut fallback_total_requests = 0u32;
-    let mut fallback_total_amount = 0f64;
+// fn extract_memory_summary(memory_payments: &[PaymentDatabaseEntry]) -> PaymentsSummaryResponseDTO {
+//     let mut default_total_requests = 0u32;
+//     let mut default_total_amount = 0f64;
+//     let mut fallback_total_requests = 0u32;
+//     let mut fallback_total_amount = 0f64;
 
-    for entry in memory_payments {
-        match entry.service {
-            PaymentProcessorServices::Default => {
-                default_total_requests += 1;
-                default_total_amount += entry.amount;
-            }
-            PaymentProcessorServices::Fallback => {
-                fallback_total_requests += 1;
-                fallback_total_amount += entry.amount;
-            }
-            _ => {}
-        }
-    }
+//     for entry in memory_payments {
+//         match entry.service {
+//             PaymentProcessorServices::Default => {
+//                 default_total_requests += 1;
+//                 default_total_amount += entry.amount;
+//             }
+//             PaymentProcessorServices::Fallback => {
+//                 fallback_total_requests += 1;
+//                 fallback_total_amount += entry.amount;
+//             }
+//             _ => {}
+//         }
+//     }
 
-    PaymentsSummaryResponseDTO {
-        default: PaymentsServiceSummary {
-            total_requests: default_total_requests,
-            total_amount: default_total_amount,
-        },
-        fallback: PaymentsServiceSummary {
-            total_requests: fallback_total_requests,
-            total_amount: fallback_total_amount,
-        },
-    }
-}
+//     PaymentsSummaryResponseDTO {
+//         default: PaymentsServiceSummary {
+//             total_requests: default_total_requests,
+//             total_amount: default_total_amount,
+//         },
+//         fallback: PaymentsServiceSummary {
+//             total_requests: fallback_total_requests,
+//             total_amount: fallback_total_amount,
+//         },
+//     }
+// }
 
 pub async fn save_processed_payment(
     mem_db: &MemoryDatabase,
@@ -97,7 +95,7 @@ pub async fn get_payments_summary<'a>(
     to: Option<DateTime<Utc>>,
 ) -> Result<PaymentsSummaryResponseDTO, Box<dyn Error>> {
     let result = memory_database
-        .get_all()
+        .pop_all()
         .await
         .map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
@@ -124,40 +122,40 @@ pub async fn get_payments_summary<'a>(
         })
         .collect();
 
-    // Extract summary from memory_payments vector
 
-    // let conn = db.pool.get().await.map_err(|e| {
-    //     Box::new(e) as Box<dyn Error>
-    // })?;
 
-    // // Bulk insert memory_payments if not empty
-    // if !memory_payments.is_empty() {
-    //     let mut query = String::from("INSERT INTO transactions (correlation_id, processed_at, amount, service) VALUES ");
-    //     let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
-    //     let mut placeholders = Vec::new();
-    //     // Precompute amount_cents_vec and service_str_vec to avoid borrow checker issues
-    //     let amount_cents_vec: Vec<i64> = memory_payments.iter().map(|entry| (entry.amount * 100.0).round() as i64).collect();
-    //     let service_str_vec: Vec<String> = memory_payments.iter().map(|entry| entry.service.to_string()).collect();
-    //     for (i, entry) in memory_payments.iter().enumerate() {
-    //         let base = i * 4;
-    //         placeholders.push(format!("(${}, ${}, ${}, ${})", base + 1, base + 2, base + 3, base + 4));
-    //         params.push(&entry.correlation_id);
-    //         params.push(&entry.requested_at);
-    //         params.push(&amount_cents_vec[i]);
-    //         params.push(&service_str_vec[i]);
-    //     }
-    //     query.push_str(&placeholders.join(", "));
-    //     let _ = conn.execute(query.as_str(), &params).await?;
-    // }
+    let conn = db.pool.get().await.map_err(|e| {
+        Box::new(e) as Box<dyn Error>
+    })?;
 
-    // let rows = conn.query(SUMMARY_QUERY, &[&from, &to]).await?;
+    if !memory_payments.is_empty() {
+        
+        let mut query = String::from("INSERT INTO transactions (correlation_id, processed_at, amount, service) VALUES ");
+        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
+        let mut placeholders = Vec::new();
 
-    // let summary = PaymentsSummaryResponseDTO {
-    //     default: extract_summary(&rows, "default"),
-    //     fallback: extract_summary(&rows, "fallback"),
-    // };
 
-    let summary = extract_memory_summary(&memory_payments);
+        let amount_cents_vec: Vec<i64> = memory_payments.iter().map(|entry| (entry.amount * 100.0).round() as i64).collect();
+        let service_str_vec: Vec<String> = memory_payments.iter().map(|entry| entry.service.to_string()).collect();
+        for (i, entry) in memory_payments.iter().enumerate() {
+            let base = i * 4;
+            placeholders.push(format!("(${}, ${}, ${}, ${})", base + 1, base + 2, base + 3, base + 4));
+            params.push(&entry.correlation_id);
+            params.push(&entry.requested_at);
+            params.push(&amount_cents_vec[i]);
+            params.push(&service_str_vec[i]);
+        }
+        query.push_str(&placeholders.join(", "));
+        let _ = conn.execute(query.as_str(), &params).await?;
+    }
+
+    let rows = conn.query(SUMMARY_QUERY, &[&from, &to]).await?;
+
+    let summary = PaymentsSummaryResponseDTO {
+        default: extract_summary(&rows, "default"),
+        fallback: extract_summary(&rows, "fallback"),
+    };
+
     Ok(summary)
 }
 
