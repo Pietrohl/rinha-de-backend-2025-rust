@@ -22,17 +22,14 @@ impl PostgresDatabase {
 
 pub(crate) type MemoryDatabaseConnection = Pool<RedisConnectionManager>;
 
-pub(crate) type MemoryDatabasePooledConnection<'a> =
-    bb8::PooledConnection<'a, bb8_redis::RedisConnectionManager>;
-
 #[derive(Debug, Clone)]
-pub(crate) struct MemoryDatabase {
+pub struct MemoryDatabase {
     pub pool: MemoryDatabaseConnection,
     collection_name: String,
 }
 
 impl MemoryDatabase {
-    pub(crate) fn new(pool: MemoryDatabaseConnection) -> Self {
+    pub fn new(pool: MemoryDatabaseConnection) -> Self {
         let collection_name = std::env::var("MEMORY_DATABASE_COLLECTION_NAME")
             .unwrap_or_else(|_| "payments".to_string());
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     Json,
     extract::{self, State},
@@ -8,87 +10,51 @@ use serde_json::json;
 
 use crate::{
     error_handling::internal_error,
-    payment_processors::{self, service},
     repository,
     structs::{AppState, PaymentDTO, PaymentSummaryQuery},
 };
+use crate::{payment_processors, service::process_payment};
 
 pub async fn payments(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     extract::Json(payload): extract::Json<PaymentDTO>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let transaction: payment_processors::structs::PaymentProcessorDTO = payload.into();
-    let mut service = payment_processors::service::PaymentProcessorServices::Default;
 
+    // Spawn the payment processing on a worker thread, respond 200 immediately
+    let state = state.clone();
+    tokio::spawn(async move {
+        let _ = process_payment(
+            &state.memory_database,
+            &state.http_client,
+            &state.redis_queue,
+            transaction,
+        )
+        .await;
+    });
 
-    let response = match payment_processors::service::process_transaction(
-        &state.http_client,
-        &transaction,
-        payment_processors::service::PaymentProcessorServices::Default,
-    )
-    .await
-    {
-        Ok(res) => Ok(res),
-        Err(_) => {
-            service = payment_processors::service::PaymentProcessorServices::Fallback;
-            service::process_transaction(
-               &state.http_client,
-                &transaction,
-                payment_processors::service::PaymentProcessorServices::Fallback,
-            )
-            .await
-        }
-    };
-
-    match response {
-        Ok(_res) => {
-            let memory_database = &state.memory_database;
-
-            repository::save_processed_payment(
-                memory_database,
-                transaction.correlation_id,
-                transaction.requested_at,
-                transaction.amount,
-                service,
-            )
-            .await
-            .map_err(internal_error)?;
-
-            Ok((
-                StatusCode::OK,
-                format!(
-                    "Payment processed successfully payload.correlation_id: {}",
-                    transaction.correlation_id
-                ),
-            ))
-        }
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!(
-                "Payment processing failed: {}, request: {} ",
-                e.1,
-                json!(&transaction)
-            ),
-        )),
-    }
+    Ok((StatusCode::OK, "Payment processing started".to_string()))
 }
 
 pub async fn payments_summary(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
 
     extract::Query(query_params): extract::Query<PaymentSummaryQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    
-
-    let summary = repository::get_payments_summary(&state.memory_database, &state.database, query_params.from, query_params.to)
-        .await
-        .map_err(|e| internal_error(&*e))?;
+    let summary = repository::get_payments_summary(
+        &state.memory_database,
+        &state.database,
+        query_params.from,
+        query_params.to,
+    )
+    .await
+    .map_err(|e| internal_error(&*e))?;
 
     Ok((StatusCode::OK, Json(summary)))
 }
 
 pub async fn purge_payments(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let conn = state.database.pool.get().await.map_err(internal_error)?;
 

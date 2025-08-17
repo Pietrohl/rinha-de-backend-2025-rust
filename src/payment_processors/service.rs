@@ -64,11 +64,6 @@ pub async fn process_transaction(
                 return Ok(());
             } else {
                 let status = resp.status();
-                println!(
-                    "Payment processing failed: {}, request: {}",
-                    &status,
-                    &resp.text().await.unwrap_or_default()
-                );
                 return Err((status, "Failed to process transaction".to_string()));
             }
         }

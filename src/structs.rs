@@ -54,4 +54,6 @@ pub struct AppState {
     pub database: crate::db::PostgresDatabase,
     pub memory_database: crate::db::MemoryDatabase,
     pub http_client: reqwest::Client,
+    pub redis_queue: crate::queue::RedisQueue,
+    pub processor_health: payment_processors::structs::PaymentProcessorHealth,
 }

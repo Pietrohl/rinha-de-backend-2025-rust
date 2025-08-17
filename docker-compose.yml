@@ -20,6 +20,7 @@ services:
       - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
+      - NUM_WORKERS=20
     deploy:
       resources:
         limits:
@@ -39,6 +40,7 @@ services:
       - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
+      - NUM_WORKERS=20
     deploy:
       resources:
         limits:

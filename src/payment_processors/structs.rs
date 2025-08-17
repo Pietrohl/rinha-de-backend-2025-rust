@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct PaymentProcessorDTO {
     #[serde(rename = "correlationId")]
     pub correlation_id: Uuid,
@@ -18,7 +18,14 @@ pub struct PaymentProcessorResponseDTO {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PaymentProcessorHealthCheckDTO {
-    pub failing: String,
+    pub failing: bool,
     #[serde(rename = "minResponseTime")]
     pub min_response_time: i32,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct PaymentProcessorHealth {
+    pub default: PaymentProcessorHealthCheckDTO,
+    pub fallback: PaymentProcessorHealthCheckDTO,
 }

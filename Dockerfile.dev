@@ -1,0 +1,11 @@
+FROM rust:1.88.0 as base
+
+WORKDIR /app
+COPY . .
+
+EXPOSE 9999
+
+RUN cargo install cargo-watch
+
+
+CMD ["sh", "-c", "cargo watch -x run"]
