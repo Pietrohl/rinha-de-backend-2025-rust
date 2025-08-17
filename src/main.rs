@@ -6,10 +6,10 @@ use crate::db::DATABASE_URL;
 // use crate::payment_processors;
 mod controller;
 mod db;
-mod structs;
-mod repository;
 mod error_handling;
 pub mod payment_processors;
+mod repository;
+mod structs;
 
 #[tokio::main]
 async fn main() {
@@ -25,8 +25,10 @@ async fn main() {
         )
         .with_state(database);
 
-    let listener = std::net::TcpListener::bind("0.0.0.0:3000")
-        .expect("error listening to socket 0.0.0.0:3000");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "9999".to_string());
+
+    let listener = std::net::TcpListener::bind(format!("0.0.0.0:{}", &port))
+        .expect(&format!("error listening to socket 0.0.0.0:{}", &port));
     listener.set_nonblocking(true).unwrap();
 
     let listener = tokio::net::TcpListener::from_std(listener).expect("error parsing std listener");

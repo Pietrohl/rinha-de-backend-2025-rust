@@ -5,4 +5,5 @@ CREATE UNLOGGED TABLE transactions (
     processed_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
     amount integer NOT NULL,
     service varchar(10) NOT NULL,
+    PRIMARY KEY (correlation_id)
 );

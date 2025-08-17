@@ -2,8 +2,8 @@ use reqwest::StatusCode;
 
 use crate::payment_processors::structs::PaymentProcessorDTO;
 
-const PAYMENT_PROCESSOR_DEFAULT_URL: &str = "http://payment-processor-default:8080";
-const PAYMENT_PROCESSOR_FALLBACK_URL: &str = "http://payment-processor-fallback:8080";
+const PAYMENT_PROCESSOR_DEFAULT_URL: &str = "http://localhost:8001";
+const PAYMENT_PROCESSOR_FALLBACK_URL: &str = "http://localhost:8002";
 
 pub enum PaymentProcessorServices {
     Default,
@@ -13,12 +13,11 @@ pub enum PaymentProcessorServices {
 impl PaymentProcessorServices {
     pub fn get_url(&self) -> String {
         match self {
-            PaymentProcessorServices::Default => {
-                PAYMENT_PROCESSOR_DEFAULT_URL.to_string()
-            }
-            PaymentProcessorServices::Fallback => {
-                PAYMENT_PROCESSOR_FALLBACK_URL.to_string()
-            }
+            PaymentProcessorServices::Default => std::env::var("PAYMENT_PROCESSOR_DEFAULT_URL")
+                .unwrap_or(PAYMENT_PROCESSOR_DEFAULT_URL.to_string()),
+
+            PaymentProcessorServices::Fallback => std::env::var("PAYMENT_PROCESSOR_FALLBACK_URL")
+                .unwrap_or(PAYMENT_PROCESSOR_FALLBACK_URL.to_string()),
         }
     }
 
