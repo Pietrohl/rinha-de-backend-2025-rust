@@ -22,8 +22,8 @@ mod structs;
 #[tokio::main]
 async fn main() {
     let http_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .connect_timeout(Duration::from_secs(1))
+        .timeout(Duration::from_secs(5))
+        .connect_timeout(Duration::from_secs(2))
         .tcp_nodelay(true)
         .pool_max_idle_per_host(500)
         .build()
@@ -101,10 +101,6 @@ async fn main() {
                                         "Failed to process payment after 100 retries: {:?}",
                                         e
                                     );
-                                    //If we fail to process the payment after 100 retries, we push it back to the queue
-                                    if let Err(e) = redis_queue.push(payment.clone()).await {
-                                        eprintln!("Failed to push payment back to queue: {:?}", e);
-                                    }
                                     break;
                                 }
                                 tokio::time::sleep(Duration::from_millis(50)).await;
