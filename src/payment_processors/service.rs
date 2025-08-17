@@ -5,6 +5,7 @@ use crate::payment_processors::structs::PaymentProcessorDTO;
 const PAYMENT_PROCESSOR_DEFAULT_URL: &str = "http://localhost:8001";
 const PAYMENT_PROCESSOR_FALLBACK_URL: &str = "http://localhost:8002";
 
+#[derive(Debug, Clone)]
 pub enum PaymentProcessorServices {
     Default,
     Fallback,
@@ -46,10 +47,10 @@ impl From<&str> for PaymentProcessorServices {
 }
 
 pub async fn process_transaction(
+    client: &reqwest::Client,
     transaction: &PaymentProcessorDTO,
     service: PaymentProcessorServices,
 ) -> Result<(), (StatusCode, String)> {
-    let client = reqwest::Client::new();
     let response: Result<reqwest::Response, reqwest::Error> = client
         .post(format!("{}/payments", service.get_url()))
         .header("Content-Type", "application/json")

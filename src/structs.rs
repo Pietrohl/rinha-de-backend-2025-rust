@@ -11,6 +11,21 @@ pub struct PaymentDTO {
     pub amount: f64,
 }
 
+
+#[derive(Debug, Clone)]
+pub struct PaymentDatabaseEntry {
+    pub correlation_id: Uuid,
+    pub requested_at: DateTime<Utc>,
+    pub amount: f64,
+    pub service: payment_processors::service::PaymentProcessorServices,
+}
+
+
+
+
+
+
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct PaymentSummaryQuery {
     pub from: Option<DateTime<Utc>>,
@@ -37,4 +52,15 @@ impl Into<payment_processors::structs::PaymentProcessorDTO> for PaymentDTO {
             requested_at: Utc::now(),
         }
     }
+}
+
+
+
+
+
+#[derive(Clone)]
+pub struct AppState {
+    pub database: crate::db::PostgresDatabase,
+    pub memory_database: crate::db::MemoryDatabase,
+    pub http_client: reqwest::Client,
 }

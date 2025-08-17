@@ -1,11 +1,21 @@
-use axum::extract::Request;
+use std::time::Duration;
+
+use crate::{
+    db::{DEFAULT_DATABASE_URL, DEFAULT_MEMORY_DATABASE_URL, MemoryDatabaseConnection},
+    error_handling::internal_error,
+    structs::AppState,
+};
+use axum::{error_handling::HandleErrorLayer, extract::Request, handler};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
+use bb8_redis::RedisConnectionManager;
 use hyper::body::Incoming;
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server,
+};
 use tokio_postgres::NoTls;
-use hyper_util::{rt::{TokioExecutor, TokioIo}, server};
-use tower::Service;
-use crate::db::DATABASE_URL;
+use tower::{Service, ServiceBuilder, buffer, limit::ConcurrencyLimitLayer};
 // use crate::payment_processors;
 mod controller;
 mod db;
@@ -16,19 +26,43 @@ mod structs;
 
 #[tokio::main]
 async fn main() {
-    let manager = PostgresConnectionManager::new_from_stringlike(DATABASE_URL, NoTls).unwrap();
-    let pool: Pool<PostgresConnectionManager<NoTls>> = bb8::Pool::builder()
-        .min_idle(50)
-        .retry_connection(true)
-        .max_size(100)
-        .build(manager)
-        .await
+    let http_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .connect_timeout(Duration::from_secs(2))
+        .tcp_nodelay(true)
+        .pool_max_idle_per_host(500)
+        .build()
         .unwrap();
 
-    let database = db::PostgresDatabase::new(pool.clone());
+    let database_url =
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
+    let memory_database_url = std::env::var("MEMORY_DATABASE_URL")
+        .unwrap_or_else(|_| DEFAULT_MEMORY_DATABASE_URL.to_string());
 
-    let app = axum::Router::new()
+    let manager = PostgresConnectionManager::new_from_stringlike(database_url, NoTls).unwrap();
+    let pool: Pool<PostgresConnectionManager<NoTls>> =
+        bb8::Pool::builder().build(manager).await.unwrap();
+
+    let database = db::PostgresDatabase::new(pool);
+
+    let memory_manager = RedisConnectionManager::new(memory_database_url).unwrap();
+    let memory_pool: MemoryDatabaseConnection =
+        bb8::Pool::builder().build(memory_manager).await.unwrap();
+
+    let memory_database = db::MemoryDatabase::new(memory_pool);
+
+    let app_state = AppState {
+        database,
+        memory_database,
+        http_client,
+    };
+
+    let priority_route = axum::Router::new()
         .route("/payments", axum::routing::post(controller::payments))
+        .layer(ConcurrencyLimitLayer::new(1024));
+        
+        
+       let app  = axum::Router::new()
         .route(
             "/payments-summary",
             axum::routing::get(controller::payments_summary),
@@ -37,7 +71,9 @@ async fn main() {
             "/purge-payments",
             axum::routing::post(controller::purge_payments),
         )
-        .with_state(database);
+        .layer(ConcurrencyLimitLayer::new(32))
+        .merge(priority_route)
+        .with_state(app_state);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "9999".to_string());
 
@@ -47,31 +83,7 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::from_std(listener).expect("error parsing std listener");
 
-  
     eprintln!("Server up!");
 
-    loop {
-        let (stream, _) = listener.accept().await.unwrap();
-
-        let tower_service = app.clone();
-
-        tokio::spawn(async move {
-            let socket = TokioIo::new(stream);
-
-            let service = hyper::service::service_fn(move |request: Request<Incoming>| {
-                tower_service.clone().call(request)
-            });
-
-            if let Err(err) = server::conn::auto::Builder::new(TokioExecutor::new())
-                .serve_connection(socket, service)
-                .await
-            {
-                eprintln!("failed to serve connection: {err:#}");
-            }
-        });
-    }
-
-
-
-
+    axum::serve(listener, app).await.unwrap();
 }

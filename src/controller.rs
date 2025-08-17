@@ -7,21 +7,22 @@ use axum::{
 use serde_json::json;
 
 use crate::{
-    db::PostgresDatabase,
     error_handling::internal_error,
     payment_processors::{self, service},
     repository,
-    structs::{PaymentDTO, PaymentSummaryQuery},
+    structs::{AppState, PaymentDTO, PaymentSummaryQuery},
 };
 
 pub async fn payments(
-    State(database): State<PostgresDatabase>,
+    State(state): State<AppState>,
     extract::Json(payload): extract::Json<PaymentDTO>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let transaction: payment_processors::structs::PaymentProcessorDTO = payload.into();
     let mut service = payment_processors::service::PaymentProcessorServices::Default;
 
+
     let response = match payment_processors::service::process_transaction(
+        &state.http_client,
         &transaction,
         payment_processors::service::PaymentProcessorServices::Default,
     )
@@ -31,6 +32,7 @@ pub async fn payments(
         Err(_) => {
             service = payment_processors::service::PaymentProcessorServices::Fallback;
             service::process_transaction(
+               &state.http_client,
                 &transaction,
                 payment_processors::service::PaymentProcessorServices::Fallback,
             )
@@ -40,13 +42,10 @@ pub async fn payments(
 
     match response {
         Ok(_res) => {
-            println!("Payment processed successfully: {:?}", json!(&transaction));
-            println!("Service used: {:?}", service.to_string());
-            println!("Pulling connection from the database...");
-            let conn = database.pool.get().await.map_err(internal_error)?;
-            println!("Saving processed payment to the database...");
+            let memory_database = &state.memory_database;
+
             repository::save_processed_payment(
-                conn,
+                memory_database,
                 transaction.correlation_id,
                 transaction.requested_at,
                 transaction.amount,
@@ -54,8 +53,6 @@ pub async fn payments(
             )
             .await
             .map_err(internal_error)?;
-
-            println!("Payment saved to the database successfully.");
 
             Ok((
                 StatusCode::OK,
@@ -77,27 +74,27 @@ pub async fn payments(
 }
 
 pub async fn payments_summary(
-    State(database): State<PostgresDatabase>,
+    State(state): State<AppState>,
+
     extract::Query(query_params): extract::Query<PaymentSummaryQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let conn = database.pool.get().await.map_err(internal_error)?;
+    
 
-    let summary = repository::get_payments_summary(conn, query_params.from, query_params.to)
+    let summary = repository::get_payments_summary(&state.memory_database, &state.database, query_params.from, query_params.to)
         .await
-        .map_err(internal_error)?;
+        .map_err(|e| internal_error(&*e))?;
 
     Ok((StatusCode::OK, Json(summary)))
 }
 
-
 pub async fn purge_payments(
-    State(database): State<PostgresDatabase>,
+    State(state): State<AppState>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let conn = database.pool.get().await.map_err(internal_error)?;
+    let conn = state.database.pool.get().await.map_err(internal_error)?;
 
     let rows_affected = repository::purge_payments(conn)
         .await
-        .map_err(internal_error)?;
+        .map_err(|e| internal_error(&*e))?;
 
     Ok((
         StatusCode::OK,

@@ -11,6 +11,7 @@ services:
       - "3000"
     depends_on:
       - db
+      - redis
     labels:
       - "autoheal=true"
     restart: always
@@ -18,11 +19,12 @@ services:
       - PAYMENT_PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
       - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - PORT=3000
+      - MEMORY_DATABASE_URL=redis://redis:6379
     deploy:
       resources:
         limits:
           cpus: "0.2"
-          memory: "50MB"
+          memory: "30MB"
 
   api02:
     <<: *api
@@ -36,6 +38,26 @@ services:
       - PAYMENT_PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
       - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - PORT=3000
+      - MEMORY_DATABASE_URL=redis://redis:6379
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: "30MB"
+
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: "40MB"
 
   nginx:
     image: nginx:alpine
@@ -57,8 +79,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: "50MB"
+          cpus: "0.2"
+          memory: "30MB"
 
   db:
     image: postgres:latest
@@ -79,8 +101,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.8"
-          memory: "200MB"
+          cpus: "0.6"
+          memory: "190MB"
 
 networks:
   backend:
