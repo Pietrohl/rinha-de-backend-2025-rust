@@ -4,7 +4,7 @@ use crate::{
     db::MemoryDatabase,
     error_handling::internal_error,
     payment_processors::{
-        self, service,
+        self,
         structs::{PaymentProcessorDTO, PaymentProcessorHealth},
     },
     queue::RedisQueue,
@@ -38,20 +38,20 @@ pub async fn process_payment(
     payload: PaymentProcessorDTO,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     let health_guard = payment_processors_health.read().await;
-    let service = select_service(&*health_guard);
+    let service = select_service(&health_guard);
 
     if service.is_none() {
         process_queue
-            .push(payload.clone())
+            .push(payload)
             .await
             .map_err(internal_error)?;
-        return Ok((
+        Ok((
             StatusCode::ACCEPTED,
             "Payment queued for processing".to_string(),
-        ));
+        ))
     } else {
         let response = payment_processors::service::process_transaction(
-            &http_client,
+            http_client,
             &payload,
             payment_processors::service::PaymentProcessorServices::Default,
         )
@@ -73,13 +73,13 @@ pub async fn process_payment(
             }
             Err(_err) => {
                 process_queue
-                    .push(payload.clone())
+                    .push(payload)
                     .await
                     .map_err(internal_error)?;
-                return Ok((
+                Ok((
                     StatusCode::ACCEPTED,
                     "Payment queued for processing".to_string(),
-                ));
+                ))
             }
         }
     }

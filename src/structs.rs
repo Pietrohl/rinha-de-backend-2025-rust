@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::payment_processors;
@@ -42,11 +42,11 @@ pub struct PaymentsSummaryResponseDTO {
     pub fallback: PaymentsServiceSummary,
 }
 
-impl Into<payment_processors::structs::PaymentProcessorDTO> for PaymentDTO {
-    fn into(self) -> payment_processors::structs::PaymentProcessorDTO {
+impl From<PaymentDTO> for payment_processors::structs::PaymentProcessorDTO {
+    fn from(val: PaymentDTO) -> Self {
         payment_processors::structs::PaymentProcessorDTO {
-            correlation_id: self.correlation_id,
-            amount: self.amount , // Convert to cents
+            correlation_id: val.correlation_id,
+            amount: val.amount , // Convert to cents
             requested_at: Utc::now(),
         }
     }

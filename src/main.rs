@@ -1,6 +1,5 @@
-use axum::http;
-use std::{default, env, sync::Arc, time::Duration};
-use tokio::{join, sync::{Mutex, RwLock}};
+use std::{env, sync::Arc, time::Duration};
+use tokio::{join, sync::RwLock};
 
 use crate::{
     db::{DEFAULT_DATABASE_URL, DEFAULT_MEMORY_DATABASE_URL, MemoryDatabaseConnection},
@@ -132,11 +131,11 @@ async fn main() {
                     let mut retries = 0;
                     loop {
                         match service::process_payment(
-                            &memory_database,
-                            &client,
-                            &redis_queue,
+                            memory_database,
+                            client,
+                            redis_queue,
                             worker_state.processor_health.clone(),
-                            payment.clone(),
+                            payment,
                         )
                         .await
                         {
@@ -145,8 +144,7 @@ async fn main() {
                                 retries += 1;
                                 if retries >= 100 {
                                     eprintln!(
-                                        "Failed to process payment after 100 retries: {:?}",
-                                        e
+                                        "Failed to process payment after 100 retries: {e:?}"
                                     );
                                     break;
                                 }
@@ -182,7 +180,7 @@ async fn main() {
     let port = std::env::var("PORT").unwrap_or_else(|_| "9999".to_string());
 
     let listener = std::net::TcpListener::bind(format!("0.0.0.0:{}", &port))
-        .expect(&format!("error listening to socket 0.0.0.0:{}", &port));
+        .unwrap_or_else(|_| panic!("error listening to socket 0.0.0.0:{}", &port));
     listener.set_nonblocking(true).unwrap();
 
     let listener = tokio::net::TcpListener::from_std(listener).expect("error parsing std listener");
@@ -192,7 +190,7 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 
     // Wait for all worker threads to finish
-    for tread in workers {
+    if let Some(tread) = workers.into_iter().next() {
         tread.await.unwrap();
     }
     eprintln!("Server down!");

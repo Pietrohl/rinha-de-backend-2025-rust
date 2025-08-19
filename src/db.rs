@@ -69,17 +69,17 @@ impl MemoryDatabase {
         Ok(result.0)
     }
 
-    pub async fn get_all(&self) -> Result<Vec<String>, bb8_redis::redis::RedisError> {
-        let mut conn = self.pool.get().await.map_err(|e| {
-            bb8_redis::redis::RedisError::from((
-                bb8_redis::redis::ErrorKind::IoError,
-                "bb8 pool error",
-                e.to_string(),
-            ))
-        })?;
-        let result: Vec<String> = AsyncCommands::lrange(&mut *conn, &self.collection_name, 0, -1).await?;
-        Ok(result)
-    }
+    // pub async fn get_all(&self) -> Result<Vec<String>, bb8_redis::redis::RedisError> {
+    //     let mut conn = self.pool.get().await.map_err(|e| {
+    //         bb8_redis::redis::RedisError::from((
+    //             bb8_redis::redis::ErrorKind::IoError,
+    //             "bb8 pool error",
+    //             e.to_string(),
+    //         ))
+    //     })?;
+    //     let result: Vec<String> = AsyncCommands::lrange(&mut *conn, &self.collection_name, 0, -1).await?;
+    //     Ok(result)
+    // }
 
 }
 

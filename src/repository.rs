@@ -24,7 +24,7 @@ fn extract_summary(rows: &[Row], service: &str) -> PaymentsServiceSummary {
             let total_requests: i64 = row.get("total_requests");
             let total_amount_dec: i64 = row.get("total_amount");
             let mut total_amount: f64 = total_amount_dec as f64; // Convert cents to dollars
-            total_amount = total_amount / 100.00; // Convert cents to dollars
+            total_amount /= 100.00; // Convert cents to dollars
             return PaymentsServiceSummary {
                 total_requests: total_requests as u32,
                 total_amount,

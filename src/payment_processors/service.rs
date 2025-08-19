@@ -32,9 +32,9 @@ impl PaymentProcessorServices {
     }
 }
 
-impl Into<String> for PaymentProcessorServices {
-    fn into(self) -> String {
-        self.to_string()
+impl From<PaymentProcessorServices> for String {
+    fn from(val: PaymentProcessorServices) -> Self {
+        val.to_string()
     }
 }
 
@@ -63,17 +63,17 @@ pub async fn process_transaction(
     match response {
         Ok(resp) => {
             if resp.status() == StatusCode::OK {
-                return Ok(());
+                Ok(())
             } else {
                 let status = resp.status();
-                return Err((status, "Failed to process transaction".to_string()));
+                Err((status, "Failed to process transaction".to_string()))
             }
         }
         Err(_err) => {
-            return Err((
+            Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_string(),
-            ));
+            ))
         }
     }
 }
@@ -96,12 +96,12 @@ pub async fn get_service_health(
     match response {
         Ok(resp) => {
             if resp.status() == StatusCode::OK {
-                let body = resp
+                
+
+                resp
                     .json()
                     .await
-                    .unwrap_or(PAYMENT_PROCESSOR_HEALTH_FAILING);
-
-                return body;
+                    .unwrap_or(PAYMENT_PROCESSOR_HEALTH_FAILING)
             } else {
                 PAYMENT_PROCESSOR_HEALTH_FAILING
             }
