@@ -1,6 +1,8 @@
+use std::f32::INFINITY;
+
 use reqwest::StatusCode;
 
-use crate::payment_processors::structs::PaymentProcessorDTO;
+use crate::payment_processors::structs::{PaymentProcessorDTO, PaymentProcessorHealthCheckDTO};
 
 const PAYMENT_PROCESSOR_DEFAULT_URL: &str = "http://localhost:8001";
 const PAYMENT_PROCESSOR_FALLBACK_URL: &str = "http://localhost:8002";
@@ -73,5 +75,37 @@ pub async fn process_transaction(
                 "Internal server error".to_string(),
             ));
         }
+    }
+}
+
+static PAYMENT_PROCESSOR_HEALTH_FAILING: PaymentProcessorHealthCheckDTO =
+    PaymentProcessorHealthCheckDTO {
+        failing: true,
+        min_response_time: INFINITY as i32,
+    };
+
+pub async fn get_service_health(
+    client: &reqwest::Client,
+    service: PaymentProcessorServices,
+) -> PaymentProcessorHealthCheckDTO {
+    let response: Result<reqwest::Response, reqwest::Error> = client
+        .get(format!("{}/payments/service-health", service.get_url()))
+        .send()
+        .await;
+
+    match response {
+        Ok(resp) => {
+            if resp.status() == StatusCode::OK {
+                let body = resp
+                    .json()
+                    .await
+                    .unwrap_or(PAYMENT_PROCESSOR_HEALTH_FAILING);
+
+                return body;
+            } else {
+                PAYMENT_PROCESSOR_HEALTH_FAILING
+            }
+        }
+        Err(_err) => PAYMENT_PROCESSOR_HEALTH_FAILING,
     }
 }

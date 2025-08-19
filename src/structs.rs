@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 use crate::payment_processors;
@@ -55,5 +58,5 @@ pub struct AppState {
     pub memory_database: crate::db::MemoryDatabase,
     pub http_client: reqwest::Client,
     pub redis_queue: crate::queue::RedisQueue,
-    pub processor_health: payment_processors::structs::PaymentProcessorHealth,
+    pub processor_health: Arc<RwLock<payment_processors::structs::PaymentProcessorHealth>>,
 }

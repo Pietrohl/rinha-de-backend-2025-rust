@@ -24,8 +24,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
-          memory: "30MB"
+          cpus: "0.4"
+          memory: "70MB"
 
   api02:
     <<: *api
@@ -40,7 +40,7 @@ services:
       - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
-      - NUM_WORKERS=20
+      - NUM_WORKERS=0
     deploy:
       resources:
         limits:
@@ -59,7 +59,7 @@ services:
       resources:
         limits:
           cpus: "0.3"
-          memory: "40MB"
+          memory: "70MB"
 
   nginx:
     image: nginx:alpine
@@ -102,8 +102,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.6"
-          memory: "190MB"
+          cpus: "0.4"
+          memory: "150MB"
 
 networks:
   backend:

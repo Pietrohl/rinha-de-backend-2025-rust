@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{os::unix::process, sync::Arc};
 
 use axum::{
     Json,
@@ -21,19 +21,14 @@ pub async fn payments(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let transaction: payment_processors::structs::PaymentProcessorDTO = payload.into();
 
-    // Spawn the payment processing on a worker thread, respond 200 immediately
-    let state = state.clone();
-    tokio::spawn(async move {
-        let _ = process_payment(
-            &state.memory_database,
-            &state.http_client,
-            &state.redis_queue,
-            transaction,
-        )
-        .await;
-    });
-
-    Ok((StatusCode::OK, "Payment processing started".to_string()))
+    process_payment(
+        &state.memory_database,
+        &state.http_client,
+        &state.redis_queue,
+        state.processor_health.clone(),
+        transaction,
+    )
+    .await
 }
 
 pub async fn payments_summary(

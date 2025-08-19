@@ -16,7 +16,7 @@ pub struct PaymentProcessorResponseDTO {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Copy)]
 pub struct PaymentProcessorHealthCheckDTO {
     pub failing: bool,
     #[serde(rename = "minResponseTime")]
@@ -24,8 +24,14 @@ pub struct PaymentProcessorHealthCheckDTO {
 }
 
 
+
+
 #[derive(Debug, Clone)]
 pub struct PaymentProcessorHealth {
     pub default: PaymentProcessorHealthCheckDTO,
     pub fallback: PaymentProcessorHealthCheckDTO,
 }
+
+
+
+pub const PAYMENT_PROCESSOR_MAX_RESPONSE_TIME: i32 = 2000; // 5 seconds

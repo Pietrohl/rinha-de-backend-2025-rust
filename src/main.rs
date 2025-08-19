@@ -1,4 +1,6 @@
-use std::{env, sync::Arc, time::Duration};
+use axum::http;
+use std::{default, env, sync::Arc, time::Duration};
+use tokio::{join, sync::{Mutex, RwLock}};
 
 use crate::{
     db::{DEFAULT_DATABASE_URL, DEFAULT_MEMORY_DATABASE_URL, MemoryDatabaseConnection},
@@ -21,6 +23,9 @@ mod structs;
 
 #[tokio::main]
 async fn main() {
+
+    println!("Starting the payment processing server...");
+
     let http_client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .connect_timeout(Duration::from_secs(2))
@@ -49,12 +54,11 @@ async fn main() {
     let memory_database = db::MemoryDatabase::new(memory_pool.clone());
     let redis_queue = queue::RedisQueue::new(memory_pool);
 
-    let app_state = Arc::new(AppState {
-        database,
-        memory_database,
-        http_client,
-        redis_queue,
-        processor_health: payment_processors::structs::PaymentProcessorHealth {
+
+    println!("Creating App State...");
+
+    let processor_health = Arc::new(RwLock::new(
+        payment_processors::structs::PaymentProcessorHealth {
             default: payment_processors::structs::PaymentProcessorHealthCheckDTO {
                 failing: false,
                 min_response_time: 0,
@@ -64,12 +68,54 @@ async fn main() {
                 min_response_time: 0,
             },
         },
+    ));
+
+    println!("App state Created!");
+
+    let health_check_http_client = http_client.clone();
+    let processor_health_clone = processor_health.clone();
+    {
+
+        println!("Starting health check thread");
+        tokio::spawn(async move {
+            loop {
+                // Call your health check logic here
+
+                let (default, fallback) = join!(
+                    payment_processors::service::get_service_health(
+                        &health_check_http_client,
+                        payment_processors::service::PaymentProcessorServices::Default
+                    ),
+                    payment_processors::service::get_service_health(
+                        &health_check_http_client,
+                        payment_processors::service::PaymentProcessorServices::Fallback
+                    )
+                );
+                // Example: let health = payment_processors::service::check_health().await;
+                let health =
+                    payment_processors::structs::PaymentProcessorHealth { default, fallback };
+                {
+                    let mut guard = processor_health_clone.write().await;
+                    *guard = health;
+                }
+                tokio::time::sleep(Duration::from_secs(6)).await;
+            }
+        });
+    }
+
+    let app_state = Arc::new(AppState {
+        database,
+        memory_database,
+        http_client,
+        redis_queue,
+        processor_health,
     });
 
     let mut workers = Vec::new();
     let num_workers = env::var("NUM_WORKERS")
-        .unwrap_or_else(|_| "50".to_string())       
-        .parse::<usize>().unwrap_or(50);
+        .unwrap_or_else(|_| "50".to_string())
+        .parse::<usize>()
+        .unwrap_or(50);
 
     //  inseatd of one worker thread, span 100 worker threads
     // each worker thread will check the redis queue and process payments
@@ -89,6 +135,7 @@ async fn main() {
                             &memory_database,
                             &client,
                             &redis_queue,
+                            worker_state.processor_health.clone(),
                             payment.clone(),
                         )
                         .await
