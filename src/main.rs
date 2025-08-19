@@ -22,7 +22,6 @@ mod structs;
 
 #[tokio::main]
 async fn main() {
-
     println!("Starting the payment processing server...");
 
     let http_client = reqwest::Client::builder()
@@ -53,7 +52,6 @@ async fn main() {
     let memory_database = db::MemoryDatabase::new(memory_pool.clone());
     let redis_queue = queue::RedisQueue::new(memory_pool);
 
-
     println!("Creating App State...");
 
     let processor_health = Arc::new(RwLock::new(
@@ -74,7 +72,6 @@ async fn main() {
     let health_check_http_client = http_client.clone();
     let processor_health_clone = processor_health.clone();
     {
-
         println!("Starting health check thread");
         tokio::spawn(async move {
             loop {
@@ -127,33 +124,39 @@ async fn main() {
             let memory_database = &worker_state.memory_database;
             let client = &worker_state.http_client;
             loop {
-                if let Ok(Some(payment)) = redis_queue.pop().await {
-                    let mut retries = 0;
-                    loop {
-                        match service::process_payment(
-                            memory_database,
-                            client,
-                            redis_queue,
-                            worker_state.processor_health.clone(),
-                            payment,
-                        )
-                        .await
-                        {
-                            Ok(_) => break,
-                            Err(e) => {
-                                retries += 1;
-                                if retries >= 100 {
-                                    eprintln!(
-                                        "Failed to process payment after 100 retries: {e:?}"
-                                    );
-                                    break;
+                let health_guard = worker_state.processor_health.read().await;
+                if let Some(_service) = service::select_service(
+                    &health_guard,
+                ) {
+                    // If a service is available, process payments
+                    if let Ok(Some(payment)) = redis_queue.pop().await {
+                        let mut retries = 0;
+                        loop {
+                            match service::process_payment(
+                                memory_database,
+                                client,
+                                redis_queue,
+                                worker_state.processor_health.clone(),
+                                payment,
+                            )
+                            .await
+                            {
+                                Ok(_) => break,
+                                Err(e) => {
+                                    retries += 1;
+                                    if retries >= 100 {
+                                        eprintln!(
+                                            "Failed to process payment after 100 retries: {e:?}"
+                                        );
+                                        break;
+                                    }
+                                    tokio::time::sleep(Duration::from_millis(50)).await;
                                 }
-                                tokio::time::sleep(Duration::from_millis(50)).await;
                             }
                         }
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         });
 

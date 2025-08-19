@@ -21,6 +21,7 @@ services:
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
       - NUM_WORKERS=20
+      - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=2000
     deploy:
       resources:
         limits:
@@ -41,6 +42,7 @@ services:
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
       - NUM_WORKERS=0
+      - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=2000
     deploy:
       resources:
         limits:

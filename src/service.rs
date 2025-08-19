@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use crate::{
     db::MemoryDatabase,
@@ -12,17 +12,20 @@ use crate::{
 };
 use axum::http::StatusCode;
 
-fn select_service(
+pub fn select_service(
     payment_processors_health: &PaymentProcessorHealth,
 ) -> Option<payment_processors::service::PaymentProcessorServices> {
+    let max_response_time = env::var("PAYMENT_PROCESSOR_MAX_RESPONSE_TIME")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(payment_processors::structs::PAYMENT_PROCESSOR_MAX_RESPONSE_TIME);
+
     if !payment_processors_health.default.failing
-        || payment_processors_health.default.min_response_time
-            < payment_processors::structs::PAYMENT_PROCESSOR_MAX_RESPONSE_TIME
+        || payment_processors_health.default.min_response_time < max_response_time
     {
         Some(payment_processors::service::PaymentProcessorServices::Default)
     } else if !payment_processors_health.fallback.failing
-        || payment_processors_health.fallback.min_response_time
-            < payment_processors::structs::PAYMENT_PROCESSOR_MAX_RESPONSE_TIME
+        || payment_processors_health.fallback.min_response_time < max_response_time
     {
         Some(payment_processors::service::PaymentProcessorServices::Fallback)
     } else {
@@ -41,10 +44,7 @@ pub async fn process_payment(
     let service = select_service(&health_guard);
 
     if service.is_none() {
-        process_queue
-            .push(payload)
-            .await
-            .map_err(internal_error)?;
+        process_queue.push(payload).await.map_err(internal_error)?;
         Ok((
             StatusCode::ACCEPTED,
             "Payment queued for processing".to_string(),
@@ -72,10 +72,7 @@ pub async fn process_payment(
                 Ok((StatusCode::OK, "Payment processed successfully".to_string()))
             }
             Err(_err) => {
-                process_queue
-                    .push(payload)
-                    .await
-                    .map_err(internal_error)?;
+                process_queue.push(payload).await.map_err(internal_error)?;
                 Ok((
                     StatusCode::ACCEPTED,
                     "Payment queued for processing".to_string(),

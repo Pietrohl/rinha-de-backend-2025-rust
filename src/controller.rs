@@ -20,15 +20,19 @@ pub async fn payments(
     extract::Json(payload): extract::Json<PaymentDTO>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let transaction: payment_processors::structs::PaymentProcessorDTO = payload.into();
+    let state = state.clone();
+    tokio::spawn(async move {
+        let _ = process_payment(
+            &state.memory_database,
+            &state.http_client,
+            &state.redis_queue,
+            state.processor_health.clone(),
+            transaction,
+        )
+        .await;
+    });
 
-    process_payment(
-        &state.memory_database,
-        &state.http_client,
-        &state.redis_queue,
-        state.processor_health.clone(),
-        transaction,
-    )
-    .await
+    Ok((StatusCode::ACCEPTED, "Payment request accepted"))
 }
 
 pub async fn payments_summary(

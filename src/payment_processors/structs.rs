@@ -34,4 +34,4 @@ pub struct PaymentProcessorHealth {
 
 
 
-pub const PAYMENT_PROCESSOR_MAX_RESPONSE_TIME: i32 = 2000; // 5 seconds
+pub const PAYMENT_PROCESSOR_MAX_RESPONSE_TIME: i32 = 200; // Maximum response time in milliseconds for a payment processor to be considered healthy 
