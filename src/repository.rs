@@ -74,7 +74,7 @@ pub async fn save_processed_payment(
     correlation_id: uuid::Uuid,
     date: DateTime<Utc>,
     amount: f64,
-    service: payment_processors::service::PaymentProcessorServices,
+    service: &payment_processors::service::PaymentProcessorServices,
 ) -> Result<(), RedisError> {
     mem_db
         .insert(&format!(

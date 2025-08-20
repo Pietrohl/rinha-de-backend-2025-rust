@@ -50,10 +50,11 @@ pub async fn process_payment(
             "Payment queued for processing".to_string(),
         ))
     } else {
+        let service = service.unwrap();
         let response = payment_processors::service::process_transaction(
             http_client,
             &payload,
-            payment_processors::service::PaymentProcessorServices::Default,
+            &service,
         )
         .await;
 
@@ -64,7 +65,7 @@ pub async fn process_payment(
                     payload.correlation_id,
                     payload.requested_at,
                     payload.amount,
-                    service.unwrap(),
+                    &service,
                 )
                 .await
                 .map_err(internal_error)?;

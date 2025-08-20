@@ -94,7 +94,7 @@ async fn main() {
                     let mut guard = processor_health_clone.write().await;
                     *guard = health;
                 }
-                tokio::time::sleep(Duration::from_secs(6)).await;
+                tokio::time::sleep(Duration::from_millis(5100)).await;
             }
         });
     }
@@ -125,9 +125,7 @@ async fn main() {
             let client = &worker_state.http_client;
             loop {
                 let health_guard = worker_state.processor_health.read().await;
-                if let Some(_service) = service::select_service(
-                    &health_guard,
-                ) {
+                if let Some(_service) = service::select_service(&health_guard) {
                     // If a service is available, process payments
                     if let Ok(Some(payment)) = redis_queue.pop().await {
                         let mut retries = 0;
@@ -154,9 +152,10 @@ async fn main() {
                                 }
                             }
                         }
+                    } else {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         });
 

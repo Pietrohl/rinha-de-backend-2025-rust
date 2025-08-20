@@ -51,7 +51,7 @@ impl From<&str> for PaymentProcessorServices {
 pub async fn process_transaction(
     client: &reqwest::Client,
     transaction: &PaymentProcessorDTO,
-    service: PaymentProcessorServices,
+    service: &PaymentProcessorServices,
 ) -> Result<(), (StatusCode, String)> {
     let response: Result<reqwest::Response, reqwest::Error> = client
         .post(format!("{}/payments", service.get_url()))

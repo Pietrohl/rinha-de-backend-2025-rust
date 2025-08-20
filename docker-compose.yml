@@ -20,13 +20,15 @@ services:
       - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
-      - NUM_WORKERS=20
-      - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=2000
+      - NUM_WORKERS=40
+      - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=4000
+      - MEMORY_DATABASE_COLLECTION_NAME=payment_collection
+      - REDIS_QUEUE_NAME=payment_processor_queue
     deploy:
       resources:
         limits:
           cpus: "0.4"
-          memory: "70MB"
+          memory: "60MB"
 
   api02:
     <<: *api
@@ -42,12 +44,14 @@ services:
       - PORT=3000
       - MEMORY_DATABASE_URL=redis://redis:6379
       - NUM_WORKERS=0
-      - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=2000
+      - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=4000
+      - MEMORY_DATABASE_COLLECTION_NAME=payment_collection
+      - REDIS_QUEUE_NAME=payment_processor_queue
     deploy:
       resources:
         limits:
           cpus: "0.2"
-          memory: "30MB"
+          memory: "20MB"
 
 
   redis:
@@ -61,7 +65,7 @@ services:
       resources:
         limits:
           cpus: "0.3"
-          memory: "70MB"
+          memory: "100MB"
 
   nginx:
     image: nginx:alpine
@@ -74,7 +78,6 @@ services:
       - "9999:9999"
     networks:
       - backend
-      - payment-processor
     environment:
       - AUTOHEAL_INTERVAL=60  
       - AUTOHEAL_START_PERIOD=300 
@@ -83,7 +86,7 @@ services:
       resources:
         limits:
           cpus: "0.2"
-          memory: "30MB"
+          memory: "20MB"
 
   db:
     image: postgres:latest
