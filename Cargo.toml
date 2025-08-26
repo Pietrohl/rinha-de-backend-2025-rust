@@ -15,8 +15,9 @@ reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 serde_json = "1.0.142"
 hyper = "1.6.0"
 hyper-util = {version = "0.1.16", features =  ["tokio", "server-auto", "http1"]}
-tower = {version = "0.5.2", features = ["util", "buffer", "limit"]}
+tower = {version = "0.5.2", features = ["util", "buffer", "limit", "timeout"]}
 redis = "0.32.5"
 bb8 = "0.9.0"
 bb8-redis = "0.24.0"
 bb8-postgres = "0.9.0"
+tower-http = "0.6.6"

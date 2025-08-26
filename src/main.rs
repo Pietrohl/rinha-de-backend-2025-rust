@@ -1,5 +1,10 @@
+use axum::{BoxError, error_handling::HandleErrorLayer};
+use hyper::StatusCode;
 use std::{env, sync::Arc, time::Duration};
 use tokio::{join, sync::RwLock};
+use tower::{
+    ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, timeout::TimeoutLayer,
+};
 
 use crate::{
     db::{DEFAULT_DATABASE_URL, DEFAULT_MEMORY_DATABASE_URL, MemoryDatabaseConnection},
@@ -9,7 +14,7 @@ use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use bb8_redis::RedisConnectionManager;
 use tokio_postgres::NoTls;
-use tower::limit::ConcurrencyLimitLayer;
+
 // use crate::payment_processors;
 mod controller;
 mod db;
@@ -164,9 +169,17 @@ async fn main() {
 
     let priority_route = axum::Router::new()
         .route("/payments", axum::routing::post(controller::payments))
-        .layer(ConcurrencyLimitLayer::new(1024));
+        .route_layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(|_: BoxError| async {
+                    StatusCode::REQUEST_TIMEOUT
+                }))
+                .layer(TimeoutLayer::new(Duration::from_secs(50)))
+                .layer(BufferLayer::new(4096))
+                .layer(ConcurrencyLimitLayer::new(2048)),
+        );
 
-    let app = axum::Router::new()
+    let low_prority_routes = axum::Router::new()
         .route(
             "/payments-summary",
             axum::routing::get(controller::payments_summary),
@@ -175,7 +188,10 @@ async fn main() {
             "/purge-payments",
             axum::routing::post(controller::purge_payments),
         )
-        .layer(ConcurrencyLimitLayer::new(32))
+        .route_layer(ConcurrencyLimitLayer::new(32));
+
+    let app = axum::Router::new()
+        .merge(low_prority_routes)
         .merge(priority_route)
         .with_state(app_state.clone());
 

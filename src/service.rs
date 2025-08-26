@@ -20,16 +20,18 @@ pub fn select_service(
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(payment_processors::structs::PAYMENT_PROCESSOR_MAX_RESPONSE_TIME);
 
-    if !payment_processors_health.default.failing
-        || payment_processors_health.default.min_response_time < max_response_time
-    {
+    if payment_processors_health.default.failing && payment_processors_health.fallback.failing {
+        None
+    } else if payment_processors_health.default.failing {
+        Some(payment_processors::service::PaymentProcessorServices::Fallback)
+    } else if payment_processors_health.fallback.failing {
         Some(payment_processors::service::PaymentProcessorServices::Default)
-    } else if !payment_processors_health.fallback.failing
-        || payment_processors_health.fallback.min_response_time < max_response_time
-    {
+    } else if (payment_processors_health.default.min_response_time <= max_response_time) {
+        Some(payment_processors::service::PaymentProcessorServices::Default)
+    } else if payment_processors_health.fallback.min_response_time <= max_response_time {
         Some(payment_processors::service::PaymentProcessorServices::Fallback)
     } else {
-        None
+        Some(payment_processors::service::PaymentProcessorServices::Default)
     }
 }
 
@@ -51,12 +53,8 @@ pub async fn process_payment(
         ))
     } else {
         let service = service.unwrap();
-        let response = payment_processors::service::process_transaction(
-            http_client,
-            &payload,
-            &service,
-        )
-        .await;
+        let response =
+            payment_processors::service::process_transaction(http_client, &payload, &service).await;
 
         match response {
             Ok(_res) => {
