@@ -16,7 +16,7 @@ pub struct PaymentProcessorResponseDTO {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Copy)]
+#[derive(Debug, Clone, Deserialize,Serialize, Copy)]
 pub struct PaymentProcessorHealthCheckDTO {
     pub failing: bool,
     #[serde(rename = "minResponseTime")]
@@ -26,7 +26,7 @@ pub struct PaymentProcessorHealthCheckDTO {
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PaymentProcessorHealth {
     pub default: PaymentProcessorHealthCheckDTO,
     pub fallback: PaymentProcessorHealthCheckDTO,

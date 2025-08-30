@@ -59,4 +59,5 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub redis_queue: crate::queue::RedisQueue,
     pub processor_health: Arc<RwLock<payment_processors::structs::PaymentProcessorHealth>>,
+    pub health_check_channel: crate::pubsub::HealthCheckChannel,
 }
