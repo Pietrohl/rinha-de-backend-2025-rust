@@ -1,12 +1,12 @@
 use crate::payment_processors::structs::PaymentProcessorHealth;
 use redis::{Client, Commands, Connection, Msg, PubSub, RedisResult};
-use serde_json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 
 
 pub struct Subscriber {
+    client: Client,
     conn: Arc<Mutex<Connection>>,
     channel_name: String,
 }
@@ -26,7 +26,7 @@ impl Subscriber {
         
         let boxed_conn: Box<Connection> = Box::new(std::mem::replace(
             &mut *conn,
-            redis::Client::open("redis://127.0.0.1/")?.get_connection()?,
+            self.client.get_connection()?,
         ));
         let conn_ref: &'static mut Connection = Box::leak(boxed_conn);
         let mut pubsub = conn_ref.as_pubsub();
@@ -36,7 +36,9 @@ impl Subscriber {
 
     pub async fn next_message(&self) -> RedisResult<Msg> {
         let mut pubsub = self.get_pubsub().await?;
+        println!("Pubsub created");
         let msg = pubsub.get_message()?;
+        println!("Message received");
         Ok(msg)
     }
 }
@@ -77,6 +79,7 @@ impl HealthCheckChannel {
 
     pub fn subscribe(&self) -> Subscriber {
         Subscriber {
+            client: self.client.clone(),
             conn: Arc::clone(&self.conn),
             channel_name: self.channel_name.clone(),
         }

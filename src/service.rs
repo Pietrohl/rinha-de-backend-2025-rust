@@ -26,7 +26,7 @@ pub fn select_service(
         Some(payment_processors::service::PaymentProcessorServices::Fallback)
     } else if payment_processors_health.fallback.failing {
         Some(payment_processors::service::PaymentProcessorServices::Default)
-    } else if (payment_processors_health.default.min_response_time <= max_response_time) {
+    } else if payment_processors_health.default.min_response_time <= max_response_time {
         Some(payment_processors::service::PaymentProcessorServices::Default)
     } else if payment_processors_health.fallback.min_response_time <= max_response_time {
         Some(payment_processors::service::PaymentProcessorServices::Fallback)

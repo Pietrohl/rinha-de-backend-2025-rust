@@ -24,6 +24,8 @@ services:
       - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=120
       - MEMORY_DATABASE_COLLECTION_NAME=payment_collection
       - REDIS_QUEUE_NAME=payment_processor_queue
+      - INSTANCE=MASTER
+      - HEALTH_CHECK_CHANNEL=healthcheck
     deploy:
       resources:
         limits:
@@ -47,6 +49,7 @@ services:
       - PAYMENT_PROCESSOR_MAX_RESPONSE_TIME=120
       - MEMORY_DATABASE_COLLECTION_NAME=payment_collection
       - REDIS_QUEUE_NAME=payment_processor_queue
+      - HEALTH_CHECK_CHANNEL=healthcheck
     deploy:
       resources:
         limits:
