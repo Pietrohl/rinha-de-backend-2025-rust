@@ -139,7 +139,7 @@ async fn main() {
     } else {
         println!("Starting health check thread");
         tokio::spawn(async move {
-            let subscriber = &app_state_clone.health_check_channel.subscribe();
+            let mut subscriber = app_state_clone.health_check_channel.subscribe().unwrap();
 
             loop {
                 println!("Wating New Message.");

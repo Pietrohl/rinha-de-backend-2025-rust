@@ -1,13 +1,10 @@
-use crate::payment_processors::structs::PaymentProcessorHealth;
+use crate::{payment_processors::structs::PaymentProcessorHealth, pubsub};
 use redis::{Client, Commands, Connection, Msg, PubSub, RedisResult};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-
-
 pub struct Subscriber {
-    client: Client,
-    conn: Arc<Mutex<Connection>>,
+    conn: Connection,
     channel_name: String,
 }
 
@@ -18,32 +15,21 @@ pub struct HealthCheckChannel {
     conn: Arc<Mutex<Connection>>,
 }
 
-
 impl Subscriber {
-    async fn get_pubsub(&self) -> RedisResult<PubSub<'static>> {
-        
-        let mut conn = self.conn.lock().await;
-        
-        let boxed_conn: Box<Connection> = Box::new(std::mem::replace(
-            &mut *conn,
-            self.client.get_connection()?,
-        ));
-        let conn_ref: &'static mut Connection = Box::leak(boxed_conn);
-        let mut pubsub = conn_ref.as_pubsub();
-        pubsub.subscribe(&[&self.channel_name])?;
-        Ok(pubsub)
+    pub fn new(conn: Connection, channel_name: &str) -> Self {
+        Self {
+            conn,
+            channel_name: channel_name.to_string(),
+        }
     }
 
-    pub async fn next_message(&self) -> RedisResult<Msg> {
-        let mut pubsub = self.get_pubsub().await?;
-        println!("Pubsub created");
-        let msg = pubsub.get_message()?;
-        println!("Message received");
-        Ok(msg)
+    pub async fn next_message(&mut self) -> RedisResult<Msg> {
+        let mut pubsub = self.conn.as_pubsub();
+        pubsub.subscribe(&[self.channel_name.clone()])?;
+
+        pubsub.get_message()
     }
 }
-
-
 
 impl HealthCheckChannel {
     pub fn new(socket: &str) -> RedisResult<Self> {
@@ -77,11 +63,10 @@ impl HealthCheckChannel {
         Ok(())
     }
 
-    pub fn subscribe(&self) -> Subscriber {
-        Subscriber {
-            client: self.client.clone(),
-            conn: Arc::clone(&self.conn),
-            channel_name: self.channel_name.clone(),
-        }
+    pub fn subscribe(&self) -> RedisResult<Subscriber> {
+        let conn = self.client.get_connection()?;
+
+        let subs = Subscriber::new(conn, &self.channel_name);
+        Ok(subs)
     }
 }
