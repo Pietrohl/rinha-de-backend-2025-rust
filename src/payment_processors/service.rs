@@ -96,8 +96,6 @@ pub async fn get_service_health(
     match response {
         Ok(resp) => {
             if resp.status() == StatusCode::OK {
-                
-
                 resp
                     .json()
                     .await

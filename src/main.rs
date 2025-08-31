@@ -20,6 +20,7 @@ mod controller;
 mod db;
 mod error_handling;
 pub mod payment_processors;
+mod pubsub;
 mod queue;
 mod repository;
 mod service;
@@ -37,24 +38,39 @@ async fn main() {
         .build()
         .unwrap();
 
+    // Constants
     let database_url =
         std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
+    let memory_database_url = std::env::var("MEMORY_DATABASE_URL")
+        .unwrap_or_else(|_| DEFAULT_MEMORY_DATABASE_URL.to_string());
+    let num_workers = env::var("NUM_WORKERS")
+        .unwrap_or_else(|_| "50".to_string())
+        .parse::<usize>()
+        .unwrap_or(50);
+    let instance = std::env::var("INSTANCE").unwrap_or_else(|_| "".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "9999".to_string());
+
+    println!("Starting Postgres Connection Pool");
     let manager = PostgresConnectionManager::new_from_stringlike(database_url, NoTls).unwrap();
     let pool: Pool<PostgresConnectionManager<NoTls>> =
         bb8::Pool::builder().build(manager).await.unwrap();
     let database = db::PostgresDatabase::new(pool);
 
-    let memory_database_url = std::env::var("MEMORY_DATABASE_URL")
-        .unwrap_or_else(|_| DEFAULT_MEMORY_DATABASE_URL.to_string());
-    let memory_manager = RedisConnectionManager::new(memory_database_url).unwrap();
+    println!("Starting Redis Connection Pool");
+    let memory_manager = RedisConnectionManager::new(memory_database_url.clone()).unwrap();
     let memory_pool: MemoryDatabaseConnection = bb8::Pool::builder()
         .min_idle(10)
         .max_size(32)
         .build(memory_manager)
         .await
         .unwrap();
-
     let memory_database = db::MemoryDatabase::new(memory_pool.clone());
+
+    println!("Starting Channel");
+    let health_check_channel =
+        Arc::new(pubsub::HealthCheckChannel::new(&memory_database_url).unwrap());
+
+    println!("Starting DLQ");
     let redis_queue = queue::RedisQueue::new(memory_pool);
 
     println!("Creating App State...");
@@ -72,16 +88,25 @@ async fn main() {
         },
     ));
 
-    println!("App state Created!");
-
     let health_check_http_client = http_client.clone();
     let processor_health_clone = processor_health.clone();
-    {
+
+    let app_state = Arc::new(AppState {
+        database,
+        memory_database,
+        http_client,
+        redis_queue,
+        processor_health,
+        health_check_channel,
+    });
+
+    println!("App state Created!");
+
+    let app_state_clone = app_state.clone();
+    if instance == "MASTER" {
         println!("Starting health check thread");
         tokio::spawn(async move {
             loop {
-                // Call your health check logic here
-
                 let (default, fallback) = join!(
                     payment_processors::service::get_service_health(
                         &health_check_http_client,
@@ -92,39 +117,60 @@ async fn main() {
                         payment_processors::service::PaymentProcessorServices::Fallback
                     )
                 );
+
                 // Example: let health = payment_processors::service::check_health().await;
                 let health =
                     payment_processors::structs::PaymentProcessorHealth { default, fallback };
+
+                {
+                    let _ = &app_state_clone.health_check_channel.update(health.clone());
+                }
+
                 {
                     let mut guard = processor_health_clone.write().await;
                     *guard = health;
                 }
-                tokio::time::sleep(Duration::from_millis(5100)).await;
+
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+    } else {
+        println!("Starting health check thread");
+        tokio::spawn(async move {
+            let subscriber = &app_state_clone.health_check_channel.subscribe();
+
+            loop {
+                let msg = subscriber
+                    .next_message()
+                    .await
+                    .and_then(|res| res.get_payload::<String>());
+
+                match msg {
+                    Ok(message) => {
+                        let health = serde_json::from_str::<
+                            payment_processors::structs::PaymentProcessorHealth,
+                        >(&message);
+
+                        if let Ok(health) = health {
+                            let mut guard = processor_health_clone.write().await;
+                            *guard = health;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Subscriber error: {:?}", e);
+                        break;
+                    }
+                }
             }
         });
     }
 
-    let app_state = Arc::new(AppState {
-        database,
-        memory_database,
-        http_client,
-        redis_queue,
-        processor_health,
-    });
-
+    println!("Starting worker threads");
     let mut workers = Vec::new();
-    let num_workers = env::var("NUM_WORKERS")
-        .unwrap_or_else(|_| "50".to_string())
-        .parse::<usize>()
-        .unwrap_or(50);
-
-    //  inseatd of one worker thread, span 100 worker threads
-    // each worker thread will check the redis queue and process payments
     for _ in 0..num_workers {
         let worker_state = app_state.clone();
 
         let tread = tokio::spawn(async move {
-            //Check redis queue in 100ms intervals, if there are any payments, process them
             let redis_queue = &worker_state.redis_queue;
             let memory_database = &worker_state.memory_database;
             let client = &worker_state.http_client;
@@ -161,12 +207,14 @@ async fn main() {
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                 }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         });
 
         workers.push(tread);
     }
 
+    println!("Starting server");
     let priority_route = axum::Router::new()
         .route("/payments", axum::routing::post(controller::payments))
         .route_layer(
@@ -194,8 +242,6 @@ async fn main() {
         .merge(low_prority_routes)
         .merge(priority_route)
         .with_state(app_state.clone());
-
-    let port = std::env::var("PORT").unwrap_or_else(|_| "9999".to_string());
 
     let listener = std::net::TcpListener::bind(format!("0.0.0.0:{}", &port))
         .unwrap_or_else(|_| panic!("error listening to socket 0.0.0.0:{}", &port));
