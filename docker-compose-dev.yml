@@ -1,38 +1,10 @@
-version: '3.5'
-
 services:
-  api01:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile.dev
-    volumes:
-      - '.:/app'
-    hostname: api01-dev
-    networks:
-      - backend
-      - payment-processor    
-    ports: 
-      - "9999:9999"
-    depends_on:
-      - db
-      - redis
-    labels:
-      - "autoheal=true"
-    restart: always
-    environment:
-      - PAYMENT_PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
-      - PAYMENT_PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
-      - PORT=9999
-      - MEMORY_DATABASE_URL=redis://redis:6379
-
-
   redis:
     image: redis:7-alpine
+    command: redis-server --loglevel debug
     hostname: redis
     ports:
       - "6379:6379"
-    networks:
-      - backend
 
 
   db:
@@ -49,12 +21,3 @@ services:
       - "5432:5432"
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - backend
-
-
-networks:
-  backend:
-    driver: bridge
-  payment-processor:
-    external: true

@@ -26,6 +26,7 @@ services:
       - REDIS_QUEUE_NAME=payment_processor_queue
       - INSTANCE=MASTER
       - HEALTH_CHECK_CHANNEL=healthcheck
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/rinha_2025_db
     deploy:
       resources:
         limits:
@@ -50,6 +51,7 @@ services:
       - MEMORY_DATABASE_COLLECTION_NAME=payment_collection
       - REDIS_QUEUE_NAME=payment_processor_queue
       - HEALTH_CHECK_CHANNEL=healthcheck
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/rinha_2025_db
     deploy:
       resources:
         limits:

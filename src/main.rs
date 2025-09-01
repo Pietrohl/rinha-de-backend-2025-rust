@@ -103,11 +103,10 @@ async fn main() {
     println!("App state Created!");
 
     let app_state_clone = app_state.clone();
+    println!("Starting health check thread, {}", instance.clone());
     if instance == "MASTER" {
-        println!("Starting health check thread");
         tokio::spawn(async move {
             loop {
-                println!("Checking Service Health");
                 let (default, fallback) = join!(
                     payment_processors::service::get_service_health(
                         &health_check_http_client,
@@ -121,11 +120,13 @@ async fn main() {
 
                 // Example: let health = payment_processors::service::check_health().await;
                 let health =
-                payment_processors::structs::PaymentProcessorHealth { default, fallback };
-                
+                    payment_processors::structs::PaymentProcessorHealth { default, fallback };
+
                 {
-                    println!("Publishing Message: {:?}", &health);
-                    let _ = &app_state_clone.health_check_channel.update(health.clone()).await;
+                    let _ = &app_state_clone
+                        .health_check_channel
+                        .update(health.clone())
+                        .await;
                 }
 
                 {
@@ -137,18 +138,15 @@ async fn main() {
             }
         });
     } else {
-        println!("Starting health check thread");
         tokio::spawn(async move {
             let mut subscriber = app_state_clone.health_check_channel.subscribe().unwrap();
 
             loop {
-                println!("Wating New Message.");
                 let msg = subscriber
                     .next_message()
                     .await
                     .and_then(|res| res.get_payload::<String>());
 
-                println!("Message Received: {:?}", msg);
                 match msg {
                     Ok(message) => {
                         let health = serde_json::from_str::<

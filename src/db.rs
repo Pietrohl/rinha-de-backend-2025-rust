@@ -84,6 +84,6 @@ impl MemoryDatabase {
 }
 
 pub(crate) const DEFAULT_DATABASE_URL: &str =
-    "host=db port=5432 password=postgres user=postgres dbname=rinha_2025_db";
+    "postgresql://postgres:postgres@localhost:5432/rinha_2025_db";
 
 pub(crate) const DEFAULT_MEMORY_DATABASE_URL: &str = "redis://localhost:6379";
